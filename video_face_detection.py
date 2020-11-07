@@ -6,47 +6,71 @@ from pathlib import Path
 
 import cv2
 import face_recognition
+from face_recognition.api import face_locations
 import imutils
 import numpy as np
 from imutils.video import FPS, VideoStream
-from mtcnn import MTCNN
 
 
 def get_face_locations_hog(frame):
-        rgb_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    rgb_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        face_locations = face_recognition.face_locations(rgb_frame)
-        return face_locations
+    face_locations = face_recognition.face_locations(rgb_frame)
+    return face_locations
+
 
 def get_face_locations_haar(frame, face_cascade):
-        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_gray = cv2.equalizeHist(frame_gray)
+    frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    frame_gray = cv2.equalizeHist(frame_gray)
 
-        face_locations = face_cascade.detectMultiScale(frame_gray)
-        face_locations = [(x, y, x+w, y+h) for (x,y,w,h) in face_locations]
-        return face_locations
-
-def get_face_locations_mtcnn(frame, detector):
-    frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-    face_locations = detector.detect_faces(frame)
-    face_locations = [(x, y, x+w, y+h) for (x,y,w,h) in face_locations]
+    face_locations = face_cascade.detectMultiScale(frame_gray)
+    face_locations = [(x, y, x+w, y+h) for (x, y, w, h) in face_locations]
     return face_locations
+
+
+def get_face_locations_cv_dnn(frame, net):
+    h, w = frame.shape[:2]
+    blob = cv2.dnn.blobFromImage(cv2.resize(
+        frame, (300, 300)), 1.0, (300, 300), (104.0, 117.0, 123.0))
+    net.setInput(blob)
+    face_locations = net.forward()
+    res = []
+    for i in range(face_locations.shape[2]):
+        confidence = face_locations[0, 0, i, 2]
+        if confidence > 0.5:
+            box = face_locations[0, 0, i, 3:7] * np.array([w, h, w, h])
+            (x, y, x1, y1) = box.astype("int")
+            # Notice the weird permutation
+            tt = (y, x1, y1, x)
+            res.append(tt)
+
+    return res
+
+
+def load_cvdnn():
+    modelFile = "models/res10_300x300_ssd_iter_140000_fp16.caffemodel"
+    configFile = "models/deploy.prototxt"
+    net = cv2.dnn.readNetFromCaffe(configFile, modelFile)
+    return net
+
 
 def main(args):
     # Init the video stream and let the camera to warm up
     print("Lights!")
-    vs = VideoStream(src=0, usePiCamera=True).start()
+    vs = VideoStream(src=0, usePiCamera=True, resolution=(
+        args.resolution[0], args.resolution[1])).start()
     print("Camera!")
     time.sleep(2.0)
 
+    detector = None
     if args.detection_method == 'haar':
         haar_path = 'haarcascade_frontalface_alt.xml'
-        face_cascade = cv2.CascadeClassifier()
-        if not face_cascade.load(haar_path):
+        detector = cv2.CascadeClassifier()
+        if not detector.load(haar_path):
             print('--(!)Error loading face cascade')
-    if args.detection_method == 'mtcnn':
-        mtcnn_detector = MTCNN()
+    if args.detection_method == 'cvdnn':
+        detector = load_cvdnn()
 
     # start the FPS throughput estimator
     fps = FPS().start()
@@ -58,9 +82,9 @@ def main(args):
         if args.detection_method == 'hog':
             face_locations = get_face_locations_hog(frame)
         elif args.detection_method == 'haar':
-            face_locations = get_face_locations_haar(frame, face_cascade)
-        elif args.detection_method == 'mtcnn':
-            face_locations = get_face_locations_mtcnn(frame, mtcnn_detector)
+            face_locations = get_face_locations_haar(frame, detector)
+        elif args.detection_method == 'cvdnn':
+            face_locations = get_face_locations_cv_dnn(frame, detector)
         else:
             raise NotImplementedError('This detection method is not ready!')
 
@@ -94,7 +118,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Detect faces and extract their bounding boxes from a video stream.")
 
-    parser.add_argument('--detection_method', type=str, choices=['hog', 'haar', 'mtcnn'],
+    parser.add_argument('--detection_method', type=str, choices=['hog', 'haar', 'cvdnn'],
                         default='hog', help="Rotate the camera output by given degrees.")
 
     parser.add_argument('--hide_stream', action='store_true',
@@ -103,5 +127,7 @@ if __name__ == "__main__":
                         help="Print the coordinates of bounding boxes")
     parser.add_argument('--rotate', type=int, default=0,
                         help="Rotate the camera output by given degrees.")
+    parser.add_argument('--resolution', type=int, nargs=2, default=[320, 240],
+                        help="The resolution of the camera captures.")
     args = parser.parse_args()
     main(args)
