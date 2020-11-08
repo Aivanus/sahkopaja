@@ -59,7 +59,7 @@ def main(args):
     # Init the video stream and let the camera to warm up
     print("Lights!")
     vs = VideoStream(src=0, usePiCamera=True, resolution=(
-        args.resolution[0], args.resolution[1])).start()
+        args.resolution[0], args.resolution[1]), framerate=args.framerate).start()
     print("Camera!")
     time.sleep(2.0)
 
@@ -129,5 +129,7 @@ if __name__ == "__main__":
                         help="Rotate the camera output by given degrees.")
     parser.add_argument('--resolution', type=int, nargs=2, default=[320, 240],
                         help="The resolution of the camera captures.")
+    parser.add_argument('--framerate', type=int, default=32,
+                        help="The framerate at which the camera will capture.")
     args = parser.parse_args()
     main(args)
