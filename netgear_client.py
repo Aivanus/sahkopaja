@@ -28,7 +28,7 @@ def main(args):
     start_time = None
 
     coords = None
-
+    face_locations = None
     while True:
 
         # receive frames from network
@@ -42,12 +42,13 @@ def main(args):
 
         _, frame = data
 
-        if args.detection_method == 'dnn':
-            face_locations = utils.get_face_locations_dnn(frame, detector)
-        else:
-            face_locations = utils.get_face_locations_hog(frame)
+        if frame_counter % args.frameskip == 0:
+            if args.detection_method == 'dnn':
+                face_locations = utils.get_face_locations_dnn(frame, detector)
+            else:
+                face_locations = utils.get_face_locations_hog(frame)
 
-        coords = utils.get_centers(face_locations)
+            coords = utils.get_centers(face_locations)
 
         frame = utils.draw_bounding_boxes(frame, face_locations)
 
@@ -87,6 +88,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--detection_method', type=str, choices=['hog', 'dnn', 'haar'],
                         default='dnn', help="Method used for face detection.")
+    parser.add_argument('--frameskip', type=int, default=1, help="Process every nth frame.")
 
     parser.add_argument('--show_video', action='store_false',
                         help="Show the processed video stream")
