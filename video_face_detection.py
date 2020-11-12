@@ -54,6 +54,15 @@ def load_cvdnn():
     net = cv2.dnn.readNetFromCaffe(configFile, modelFile)
     return net
 
+def draw_bounding_boxes(frame, face_locations):
+    for (top, right, bottom, left) in face_locations:
+            center_x = (right + left)//2
+            center_y = (bottom + top)//2
+            cv2.circle(frame, (center_x, center_y), radius=1,
+                       color=(0, 255, 0), thickness=-1)
+            cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+    return frame
+
 
 def main(args):
     # Init the video stream and let the camera to warm up
@@ -88,15 +97,7 @@ def main(args):
         else:
             raise NotImplementedError('This detection method is not ready!')
 
-        for (top, right, bottom, left) in face_locations:
-            center_x = (right + left)//2
-            center_y = (bottom + top)//2
-            cv2.circle(frame, (center_x, center_y), radius=1,
-                       color=(0, 255, 0), thickness=-1)
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
-            if args.print_coords:
-                print(f"({center_x, center_y})")
-                print(face_locations)
+        frame = draw_bounding_boxes(frame, face_locations)
 
         if not args.hide_stream:
             cv2.imshow("Frame", imutils.resize(frame, width=800))
