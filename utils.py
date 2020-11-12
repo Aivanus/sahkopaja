@@ -1,5 +1,6 @@
 import cv2
 import face_recognition
+from face_recognition.api import face_locations
 import numpy as np
 
 
@@ -72,3 +73,6 @@ def draw_bounding_boxes(frame, face_locations):
         cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
     return frame
 
+
+def get_centers(face_locations):
+    return [(int((right + left)//2), int((bottom + top)//2)) for (top, right, bottom, left) in face_locations]
