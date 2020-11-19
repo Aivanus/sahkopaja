@@ -34,6 +34,8 @@ def main(args):
 
     coords = None
     face_locations = None
+    bb_colors = None
+    bb_text = None
     while True:
 
         # receive frames from network
@@ -54,22 +56,23 @@ def main(args):
 
             coords = utils.get_centers(face_locations)
 
-        if not args.ignore_masks:
-            masks = utils.detect_mask(frame, face_locations, mask_detector)
-            has_mask = [mask > no_mask for (mask, no_mask) in masks]
-            bb_colors = [(0, 255, 0) if b else (0, 0, 255) for b in has_mask]
-            bb_text = [
-                f"{round(m*100,2)}%" if b
-                else f"{round(nm*100,2)}%"
-                for (b, (m, nm)) in zip(has_mask, masks)]
-        else:
-            has_mask = [False for _ in face_locations]
-            bb_colors = None
-            bb_text = None
+            if not args.ignore_masks:
+                masks = utils.detect_mask(frame, face_locations, mask_detector)
+                has_mask = [mask > no_mask for (mask, no_mask) in masks]
+                bb_colors = [(0, 255, 0) if b else (0, 0, 255)
+                             for b in has_mask]
+                bb_text = [
+                    f"{round(m*100,2)}%" if b
+                    else f"{round(nm*100,2)}%"
+                    for (b, (m, nm)) in zip(has_mask, masks)]
+            else:
+                has_mask = [False for _ in face_locations]
+                bb_colors = None
+                bb_text = None
 
-        # Only return coordinates of maskless people
-        coords = utils.get_centers(
-            [fl for (fl, b) in zip(face_locations, has_mask) if not b])
+            # Only return coordinates of maskless people
+            coords = utils.get_centers(
+                [fl for (fl, b) in zip(face_locations, has_mask) if not b])
 
         # Draw the bounding boxes etc.
         frame = utils.draw_bounding_boxes(
