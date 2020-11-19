@@ -1,7 +1,6 @@
 import cv2
 import face_recognition
 import numpy as np
-from face_recognition.api import face_locations
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
