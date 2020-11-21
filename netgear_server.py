@@ -16,7 +16,8 @@ def main(args):
 
     server_options = {'compression_format': '.jpg',
                       'compression_param': [cv2.IMWRITE_JPEG_QUALITY, args.compression_quality],
-                      'flag': 1}
+                      'flag': 1,
+                      'max_retries': 100}
     server = NetGear(address=args.address, port=args.port, protocol='tcp', bidirectional_mode=True,
                      pattern=1, logging=False, **server_options)
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import time
+from itertools import count
 
 import cv2
 from vidgear.gears import NetGear
@@ -15,31 +16,37 @@ def main(args):
     client = NetGear(address=args.address, port=args.port, protocol='tcp', bidirectional_mode=True,
                      pattern=1, receive_mode=True, logging=True, **client_options)
 
-    detector = None
+    face_detector = None
+    mask_detector = None
+
     if args.detection_method == 'dnn':
         model_file = "models/res10_300x300_ssd_iter_140000_fp16.caffemodel"
         config_file = "models/deploy.prototxt"
-        detector = utils.load_cvdnn(model_file, config_file)
+        face_detector = utils.load_cvdnn(model_file, config_file)
     elif args.detection_method == 'haar':
         model_file = 'models/haarcascade_frontalface_alt.xml'
-        detector = utils.load_haar_cascade(model_file)
+        face_detector = utils.load_haar_cascade(model_file)
 
-    # Load mask detector
-    # Credit for the model: https://github.com/chandrikadeb7/Face-Mask-Detection
-    mask_detector = utils.load_masknet("mask_detector.model")
+    if not args.ignore_masks:
+        # Load mask detector
+        # Credit for the model: https://github.com/chandrikadeb7/Face-Mask-Detection
+        mask_detector = utils.load_masknet("mask_detector.model")
 
     # Keep track of FPS
     frame_counter = 0
     start_time = None
 
-    coords = None
+    # Bookkeeping for face tracking
+    next_id = count(0)
+    objects = {}
+
+    target_coords = []
     face_locations = None
-    bb_colors = None
-    bb_text = None
+    target = None
     while True:
 
         # receive frames from network
-        data = client.recv(return_data=coords)
+        data = client.recv(return_data=target_coords)
         if start_time is None:
             start_time = time.time()
 
@@ -50,38 +57,40 @@ def main(args):
 
         if frame_counter % args.frameskip == 0:
             if args.detection_method == 'dnn':
-                face_locations = utils.get_face_locations_dnn(frame, detector)
+                face_locations = utils.get_face_locations_dnn(
+                    frame, face_detector)
             else:
                 face_locations = utils.get_face_locations_hog(frame)
 
-            coords = utils.get_centers(face_locations)
+            utils.update_objects(objects, face_locations, next_id)
+            if frame_counter % args.mask_detect_freq == 0:
+                utils.detect_mask2(frame, objects, mask_detector)
+            print(objects)
 
-            if not args.ignore_masks:
-                masks = utils.detect_mask(frame, face_locations, mask_detector)
-                has_mask = [mask > no_mask for (mask, no_mask) in masks]
-                bb_colors = [(0, 255, 0) if b else (0, 0, 255)
-                             for b in has_mask]
-                bb_text = [
-                    f"{round(m*100,2)}%" if b
-                    else f"{round(nm*100,2)}%"
-                    for (b, (m, nm)) in zip(has_mask, masks)]
+            # Choose the target
+            if target not in objects.keys() or objects[target]['has_mask']:
+                temp = [i for i, val in objects.items() if not val['has_mask']]
+                if temp:
+                    target = temp[0]
+                else:
+                    target = None
+            if target is not None:
+                target_coords = objects[target]['centroid']
             else:
-                has_mask = [False for _ in face_locations]
-                bb_colors = None
-                bb_text = None
+                target_coords = []
+                
 
-            # Only return coordinates of maskless people
-            coords = utils.get_centers(
-                [fl for (fl, b) in zip(face_locations, has_mask) if not b])
+        print(target)
 
-        # Draw the bounding boxes etc.
-        frame = utils.draw_bounding_boxes(
-            frame, face_locations, bb_colors, bb_text)
+        frame = utils.draw_bounding_boxes2(frame, objects)
+
+        # frame = utils.draw_bounding_boxes(
+        #     frame, face_locations, bb_colors, bb_text)
 
         if args.show_video:
             # Show output window
-            if args.track_face and face_locations:
-                (top, right, bottom, left) = face_locations[0]
+            if args.track_face and target is not None:
+                (top, right, bottom, left) = objects[target]['bounding_box']
                 cv2.imshow("Output Frame", frame[bottom:top, left:right])
             else:
                 cv2.imshow("Output Frame", frame)
@@ -116,6 +125,8 @@ if __name__ == "__main__":
                         default='dnn', help="Method used for face detection.")
     parser.add_argument('--frameskip', type=int, default=1,
                         help="Process every nth frame.")
+    parser.add_argument('--mask_detect_freq', type=int, default=5,
+                        help="How often to update mask information.")                        
 
     parser.add_argument('--show_video', action='store_false',
                         help="Show the processed video stream")

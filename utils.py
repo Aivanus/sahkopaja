@@ -1,6 +1,11 @@
+import enum
+import time
+
 import cv2
 import face_recognition
 import numpy as np
+from scipy.spatial.distance import cdist
+
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
@@ -115,3 +120,113 @@ def detect_mask(frame, face_locations, clf):
     faces = preprocess_input(np.array(faces))
 
     return clf.predict(faces)
+
+
+def detect_mask2(frame, objects, clf):
+    """Uses a pretrained model clf and extracted face locations
+    to detect whether the person wears a mask. Returns
+    probabilities (mask, no_mask) for each provided face.
+    """
+
+    # No faces detected
+    if len(objects) == 0:
+        return []
+
+    face_locations = [o['bounding_box'] for o in objects.values()]
+    # Extract the faces
+    faces = [frame[bottom:top, left:right]
+             for (top, right, bottom, left) in face_locations]
+    # Preprocess the faces for the model
+    faces = [img_to_array(cv2.resize(cv2.cvtColor(
+        face, cv2.COLOR_BGR2RGB), (224, 224))) for face in faces]
+    faces = preprocess_input(np.array(faces))
+    masks = clf.predict(faces)
+
+    # Update the mask information (Robust to intermittent false predictions)
+    for o, (mask, no_mask) in zip(objects.values(), masks):
+        if o['in_frame']:
+            if o['has_mask']:
+                if no_mask > mask:
+                    o['consecutive_frames'] += 1
+                else:
+                    o['consecutive_frames'] = 0
+            else:
+                if mask > no_mask:
+                    o['consecutive_frames'] += 1
+                else:
+                    o['consecutive_frames'] = 0
+        if o['consecutive_frames'] > 3:
+            o['has_mask'] = not o['has_mask']
+            o['consecutive_frames'] = 0
+
+
+def draw_bounding_boxes2(frame, objects):
+    for o_id, o in objects.items():
+        if o['has_mask']:
+            frame_color = (0, 255, 0)
+        else:
+            # Default color red
+            frame_color = (0, 0, 255)
+
+        cv2.circle(frame, o['centroid'], radius=1,
+                   color=(0, 255, 0), thickness=-1)
+
+        (top, right, bottom, left) = o['bounding_box']
+        cv2.rectangle(frame, (left, top), (right, bottom), frame_color, 2)
+
+        cv2.putText(frame, f"ID:{o_id}", (left, bottom-10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, frame_color)
+
+    return frame
+
+
+def update_objects(objects, bounding_boxes, next_id):
+    """Associates the newly detected objects with already known objects
+    if it is possible. The pairs are determined by euclidean distance
+    between centroids.
+    """
+    # How long to wait in seconds before forgetting an object that
+    # is not in frame.
+    
+    time_to_forget = 3
+
+    centroids = get_centers(bounding_boxes)
+
+    pairs = {}
+    object_ids = list(objects.keys())
+    object_centroids = np.array([o['centroid'] for o in objects.values()])
+
+    if len(object_centroids) != 0 and len(centroids) != 0:
+        distances = cdist(object_centroids, centroids)
+
+        nearest_centroids = distances.argmin(axis=1)
+        # Loop through objects in closest neighbour order
+        for i in distances.min(axis=1).argsort():
+            if nearest_centroids[i] in pairs.values():
+                continue
+
+            objects[object_ids[i]
+                    ]['bounding_box'] = bounding_boxes[nearest_centroids[i]]
+            objects[object_ids[i]
+                    ]['centroid'] = centroids[nearest_centroids[i]]
+            objects[object_ids[i]]['last_detected_time'] = time.time()
+            objects[object_ids[i]]['in_frame'] = True
+            pairs[object_ids[i]] = nearest_centroids[i]
+
+    # Forget the objects that haven't been seen for a while
+    for o_id, val in list(objects.items()):
+        if o_id not in pairs.keys():
+            objects[o_id]['in_frame'] = False
+            if time.time() - val['last_detected_time'] > time_to_forget:
+                del objects[o_id]
+
+    # Add the new objects
+    for i, (cent, bb) in enumerate(zip(centroids, bounding_boxes)):
+        if i not in pairs.values():
+            objects[next(next_id)] = {'bounding_box': bb,
+                                      'centroid': cent,
+                                      'has_mask': True,
+                                      'last_detected_time': time.time(),
+                                      'consecutive_frames': 0,
+                                      'in_frame': True
+                                      }
