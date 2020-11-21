@@ -11,8 +11,10 @@ def main(args):
 
     # Start capturing live Monitor screen frames with default settings
     # time_delay for warming the camera up
+    pi_options = {"exposure_mode": "auto", "iso": 800,
+                  "exposure_compensation": 5, "awb_mode": "horizon"}
     stream = PiGear(time_delay=2, rotation=args.rotation, resolution=args.resolution,
-                    framerate=args.framerate, logging=args.logging).start()
+                    framerate=args.framerate, logging=args.logging, **pi_options).start()
 
     server_options = {'compression_format': '.jpg',
                       'compression_param': [cv2.IMWRITE_JPEG_QUALITY, args.compression_quality],
