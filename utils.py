@@ -1,11 +1,9 @@
-import enum
 import time
 
 import cv2
 import face_recognition
 import numpy as np
 from scipy.spatial.distance import cdist
-
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
@@ -75,57 +73,15 @@ def load_masknet(model_file):
     return load_model(model_file)
 
 
-def draw_bounding_boxes(frame, face_locations, colors=None, texts=None):
-
-    for i, (top, right, bottom, left) in enumerate(face_locations):
-        center_x = (right + left)//2
-        center_y = (bottom + top)//2
-
-        if colors:
-            frame_color = colors[i]
-        else:
-            # Default color red
-            frame_color = (0, 0, 255)
-
-        cv2.circle(frame, (center_x, center_y), radius=1,
-                   color=(0, 255, 0), thickness=-1)
-        cv2.rectangle(frame, (left, top), (right, bottom), frame_color, 2)
-        if texts:
-            cv2.putText(frame, texts[i], (left, bottom-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, frame_color)
-
-    return frame
-
-
 def get_centers(face_locations):
     return [(int((right + left)//2), int((bottom + top)//2)) for (top, right, bottom, left) in face_locations]
 
 
-def detect_mask(frame, face_locations, clf):
+def detect_mask(frame, objects, clf):
     """Uses a pretrained model clf and extracted face locations
-    to detect whether the person wears a mask. Returns
-    probabilities (mask, no_mask) for each provided face.
-    """
-
-    # No faces detected
-    if len(face_locations) == 0:
-        return []
-
-    # Extract the faces
-    faces = [frame[bottom:top, left:right]
-             for (top, right, bottom, left) in face_locations]
-    # Preprocess the faces for the model
-    faces = [img_to_array(cv2.resize(cv2.cvtColor(
-        face, cv2.COLOR_BGR2RGB), (224, 224))) for face in faces]
-    faces = preprocess_input(np.array(faces))
-
-    return clf.predict(faces)
-
-
-def detect_mask2(frame, objects, clf):
-    """Uses a pretrained model clf and extracted face locations
-    to detect whether the person wears a mask. Returns
-    probabilities (mask, no_mask) for each provided face.
+    to detect whether the person wears a mask. Classifier returns
+    probabilities (mask, no_mask) for each provided face. The objects
+    are (robustly) updated according to the classifier output.
     """
 
     # No faces detected
@@ -160,7 +116,7 @@ def detect_mask2(frame, objects, clf):
             o['consecutive_frames'] = 0
 
 
-def draw_bounding_boxes2(frame, objects):
+def draw_bounding_boxes(frame, objects):
     for o_id, o in objects.items():
         if o['has_mask']:
             frame_color = (0, 255, 0)
@@ -185,9 +141,9 @@ def update_objects(objects, bounding_boxes, next_id):
     if it is possible. The pairs are determined by euclidean distance
     between centroids.
     """
+
     # How long to wait in seconds before forgetting an object that
     # is not in frame.
-    
     time_to_forget = 3
 
     centroids = get_centers(bounding_boxes)

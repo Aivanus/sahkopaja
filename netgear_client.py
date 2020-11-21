@@ -41,7 +41,6 @@ def main(args):
     objects = {}
 
     target_coords = []
-    face_locations = None
     target = None
     while True:
 
@@ -62,10 +61,12 @@ def main(args):
             else:
                 face_locations = utils.get_face_locations_hog(frame)
 
+            # Update the object positions and other parametes
             utils.update_objects(objects, face_locations, next_id)
+
             if frame_counter % args.mask_detect_freq == 0:
-                utils.detect_mask2(frame, objects, mask_detector)
-            print(objects)
+                # Update the mask status of the faces
+                utils.detect_mask(frame, objects, mask_detector)
 
             # Choose the target
             if target not in objects.keys() or objects[target]['has_mask']:
@@ -78,17 +79,12 @@ def main(args):
                 target_coords = objects[target]['centroid']
             else:
                 target_coords = []
-                
-
-        print(target)
-
-        frame = utils.draw_bounding_boxes2(frame, objects)
-
-        # frame = utils.draw_bounding_boxes(
-        #     frame, face_locations, bb_colors, bb_text)
 
         if args.show_video:
-            # Show output window
+            # Draw the extra information onto the frame
+            frame = utils.draw_bounding_boxes(frame, objects)
+
+            # Show output
             if args.track_face and target is not None:
                 (top, right, bottom, left) = objects[target]['bounding_box']
                 cv2.imshow("Output Frame", frame[bottom:top, left:right])
@@ -126,7 +122,7 @@ if __name__ == "__main__":
     parser.add_argument('--frameskip', type=int, default=1,
                         help="Process every nth frame.")
     parser.add_argument('--mask_detect_freq', type=int, default=5,
-                        help="How often to update mask information.")                        
+                        help="How often to update mask information.")
 
     parser.add_argument('--show_video', action='store_false',
                         help="Show the processed video stream")
