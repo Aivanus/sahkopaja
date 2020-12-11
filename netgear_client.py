@@ -5,6 +5,7 @@ from itertools import count
 
 import cv2
 from vidgear.gears import NetGear
+import numpy as np
 
 import utils
 
@@ -41,11 +42,12 @@ def main(args):
     objects = {}
 
     target_coords = []
+    target_bb_size = 0
     target = None
     while True:
 
         # receive frames from network
-        data = client.recv(return_data=target_coords)
+        data = client.recv(return_data=(target_coords, target_bb_size))
         if start_time is None:
             start_time = time.time()
 
@@ -77,12 +79,25 @@ def main(args):
                     target = None
             if target is not None:
                 target_coords = objects[target]['centroid']
+                # Change to centered coordinates
+                h, w, _ = frame.shape
+                x0, y0 = (w//2, h//2)
+                target_coords = (target_coords[0]-x0, target_coords[1]-y0)
+
+                # Bounding box size
+                (top, right, bottom, left) = objects[target]['bounding_box']
+                target_bb_size = round(np.linalg.norm([(top, right), (bottom, left)]),2)
+
             else:
                 target_coords = []
+                target_bb_size = 0
 
         if args.show_video:
             # Draw the extra information onto the frame
             frame = utils.draw_bounding_boxes(frame, objects)
+            # h, w, _ = frame.shape
+            # cv2.circle(frame, (w//2, h//2), radius=5,
+            #        color=(0, 255, 0), thickness=-1)
 
             # Show output
             if args.track_face and target is not None:
