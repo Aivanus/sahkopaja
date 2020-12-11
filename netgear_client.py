@@ -31,7 +31,7 @@ def main(args):
     if not args.ignore_masks:
         # Load mask detector
         # Credit for the model: https://github.com/chandrikadeb7/Face-Mask-Detection
-        mask_detector = utils.load_masknet("mask_detector.model")
+        mask_detector = utils.load_masknet("models/mask_detector.model")
 
     # Keep track of FPS
     frame_counter = 0
