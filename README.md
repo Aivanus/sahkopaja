@@ -1,3 +1,7 @@
-# Sähköpajan projektityö s2020
+# Koronabotti
 
-Täältä löytyy koodi sähköpajan projektia varten.
+## Sähköpajan projektityö s2020
+
+Projektin dokumentaatio: [Aalto Wiki](https://wiki.aalto.fi/pages/viewpage.action?pageId=175519698)
+
+Tässä repossa on kaikki projektissa käytetty koodi.
