@@ -2,7 +2,6 @@
 #include <NewPing.h>
 
 #define maxDistance 400 // Max distance, which is read by sensors, if over 400 cm then maxDistance = 0
-// Moottorien pinnien määrittely. driverin käytön takia käytetään motorInterfacetypena 1
 
 // Right front motor
 #define dirRightFront 10
@@ -28,7 +27,7 @@ unsigned long distanceFront, distanceRight, distanceLeft;
 int tooClose = 20;
 
 
-// lukea useampaa sensoria samaan aikaan.
+// Three sensors 
 NewPing frontSensor = NewPing(22,23, maxDistance);
 NewPing rightSensor = NewPing(24,25, maxDistance);
 NewPing leftSensor = NewPing(26,27, maxDistance);
@@ -137,6 +136,7 @@ void loop() {
   distanceFront = frontSensor.ping_cm();
   distanceRight = rightSensor.ping_cm();
   distanceLeft = leftSensor.ping_cm();
+  // communication with raspberry pi via serial communication
   if (Serial.available() > 0){
     char readChar = Serial.read();
     if(readChar == 'R'){ // Turn right
@@ -147,11 +147,11 @@ void loop() {
       if(distanceFront > tooClose || distanceFront == 0){
         forward();  
       } 
-    } else if(readChar == 'T'){ // Taaksepäin :D 
+    } else if(readChar == 'T'){ // Reserse
         reverse();  
     }  else {
       if(readChar == 'M'){
-        tooClose = 100;
+        tooClose = 100; // If maskless person identified
       } else {
         tooClose = 30;
       }
